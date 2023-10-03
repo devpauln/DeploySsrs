@@ -392,19 +392,21 @@ function Publish-Reports()
 
             if (Test-Path -LiteralPath $rdlPath -PathType Leaf)
             {
-                New-SsrsReport -Proxy $Proxy `
-                            -RdlPath $rdlPath `
-                            -Path $currentFolder `
-                            -Name $report.Name `
-                            -DataSources $DataSources `
-                            -ReferenceDataSources $ReferenceDataSources `
-                            -DataSets $DataSets `
-                            -ReferenceDataSets $ReferenceDataSets `
-                            -Hidden:$report.Hidden `
-                            -Overwrite:$Overwrite `
-                    | Out-String | Write-Verbose
-
-                Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
+                Execute-WithRetry -ScriptBlock {
+                    New-SsrsReport -Proxy $Proxy `
+                                   -RdlPath $rdlPath `
+                                   -Path $currentFolder `
+                                   -Name $report.Name `
+                                   -DataSources $DataSources `
+                                   -ReferenceDataSources $ReferenceDataSources `
+                                   -DataSets $DataSets `
+                                   -ReferenceDataSets $ReferenceDataSets `
+                                   -Hidden:$report.Hidden `
+                                   -Overwrite:$Overwrite `
+                        | Out-String | Write-Verbose
+                
+                    Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
+                } -MaxRetryCount 3 -DelaySeconds 10
             }
             else
             {
@@ -1159,6 +1161,30 @@ function New-SsrsDataSet()
         }
     }
     END { }
+}
+
+function Execute-WithRetry {
+    param (
+        [scriptblock]$ScriptBlock,
+        [int]$MaxRetryCount = 5,
+        [int]$DelaySeconds = 5
+    )
+
+    $currentRetryCount = 0
+    while ($true) {
+        try {
+            . $ScriptBlock
+            return
+        } catch {
+            if ($currentRetryCount -ge $MaxRetryCount) {
+                throw
+            } else {
+                Write-Warning "Attempt [$($currentRetryCount + 1)] failed: $_. Retrying in $DelaySeconds seconds..."
+                Start-Sleep -Seconds $DelaySeconds
+                $currentRetryCount++
+            }
+        }
+    }
 }
 
 class Folder
