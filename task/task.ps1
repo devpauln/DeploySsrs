@@ -31,6 +31,8 @@ try
         $proxy = New-WebServiceProxy -Uri $url -Namespace SSRS.ReportingService2010 -Credential $credential -Class "SSRS"
     }
 
+    $decoratedProxy = [SoapClientProxyDecorator]::new($proxy);
+
     if(-not (Test-Path $rdlFilesFolder -PathType Container))
     {
         throw "Provided files folder path $rdlFilesFolder is not valid."
@@ -44,16 +46,16 @@ try
     {
         throw "Provided configuration file path $ssrsFilePath is not valid."
     }
-    Publish-SsrsFolder -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite
-    $dataSources = Publish-DataSource -Folder $folder -Proxy $proxy -Overwrite:$overwrite
-    $dataSets = Publish-DataSet -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite -DataSources $dataSources
-    Publish-Reports -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -DataSources $dataSources -ReferenceDataSources $referenceDataSources -DataSets $dataSets -ReferenceDataSets $referenceDataSets -Overwrite:$overwrite
+    Publish-SsrsFolder -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite
+    $dataSources = Publish-DataSource -Folder $folder -Proxy $decoratedProxy -Overwrite:$overwrite
+    $dataSets = Publish-DataSet -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite -DataSources $dataSources
+    Publish-Reports -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -DataSources $dataSources -ReferenceDataSources $referenceDataSources -DataSets $dataSets -ReferenceDataSets $referenceDataSets -Overwrite:$overwrite
 }
 finally
 {
-    if ($proxy)
+    if ($decoratedProxy)
     {
-        $proxy.Dispose()
+        $decoratedProxy.Dispose()
     }
 
     Trace-VstsLeavingInvocation $MyInvocation

@@ -5,7 +5,7 @@ function New-DataSource()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$DataSourceName,
         [string]$Path = "/",
         [string][parameter(Mandatory = $true)]$ConnectString,
@@ -108,7 +108,7 @@ function Set-Policy()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [SSRS.ReportingService2010.Policy[]]$Policies,
         [switch]$DisposeProxy
@@ -176,7 +176,7 @@ function Publish-SsrsFolder()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string]$FilesFolder,
         [switch]$Overwrite
     )
@@ -236,7 +236,7 @@ function Publish-DataSource()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [switch]$Overwrite
     )
     BEGIN
@@ -296,7 +296,7 @@ function Publish-DataSet()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [SsrsDataSource[]]$DataSources,
         [string]$FilesFolder,
         [switch]$Overwrite
@@ -361,7 +361,7 @@ function Publish-Reports()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string]$FilesFolder,
         [SsrsDataSource[]]$DataSources,
         [SsrsDataSet[]]$DataSets,
@@ -392,21 +392,19 @@ function Publish-Reports()
 
             if (Test-Path -LiteralPath $rdlPath -PathType Leaf)
             {
-                Execute-WithRetry -ScriptBlock {
-                    New-SsrsReport -Proxy $Proxy `
-                                   -RdlPath $rdlPath `
-                                   -Path $currentFolder `
-                                   -Name $report.Name `
-                                   -DataSources $DataSources `
-                                   -ReferenceDataSources $ReferenceDataSources `
-                                   -DataSets $DataSets `
-                                   -ReferenceDataSets $ReferenceDataSets `
-                                   -Hidden:$report.Hidden `
-                                   -Overwrite:$Overwrite `
-                        | Out-String | Write-Verbose
-                
-                    Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
-                } -MaxRetryCount 3 -DelaySeconds 10
+                New-SsrsReport -Proxy $Proxy `
+                            -RdlPath $rdlPath `
+                            -Path $currentFolder `
+                            -Name $report.Name `
+                            -DataSources $DataSources `
+                            -ReferenceDataSources $ReferenceDataSources `
+                            -DataSets $DataSets `
+                            -ReferenceDataSets $ReferenceDataSets `
+                            -Hidden:$report.Hidden `
+                            -Overwrite:$Overwrite `
+                    | Out-String | Write-Verbose
+
+                Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
             }
             else
             {
@@ -427,7 +425,7 @@ function Set-SecurityPolicy()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Folder,
         [string]$Name,
         [RoleAssignment[]]$RoleAssignments,
@@ -623,7 +621,7 @@ function Test-SsrsItem()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -662,7 +660,7 @@ function Test-InheritParentSecurity()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -698,7 +696,7 @@ function Set-InheritParentSecurity()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -730,7 +728,7 @@ function New-SsrsFolder()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$FolderName,
         [string]$Parent = "/",
         [switch]$DisposeProxy,
@@ -848,7 +846,7 @@ function Get-SsrsItem()
     [CmdletBinding()]
     param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [string]$Path = '/',
         [ValidateSet("Component", "Model", "LinkedReport", "Site", "DataSet", "Folder","DataSource","Report", "Resource")][parameter(Mandatory = $true)][string]$Type,
         [switch]$DisposeProxy
@@ -906,7 +904,7 @@ function New-SsrsReport()
     [CmdletBinding()]
 	param
 	(
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [ValidateScript({Test-Path $_ -PathType 'Leaf'})][parameter(Mandatory = $true)][System.IO.FileInfo]$RdlPath,    
         [string]$Path = "/",
         [string]$Name,
@@ -1082,7 +1080,7 @@ function New-SsrsDataSet()
     [CmdletBinding()]
 	param
     (
-        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
         [ValidateScript({Test-Path $_ -PathType 'Leaf'})][parameter(Mandatory = $true)][string]$RsdPath,
         [SsrsDataSource[]]$DataSources,
         [string]$Path = "/",
@@ -1161,30 +1159,6 @@ function New-SsrsDataSet()
         }
     }
     END { }
-}
-
-function Execute-WithRetry {
-    param (
-        [scriptblock]$ScriptBlock,
-        [int]$MaxRetryCount = 5,
-        [int]$DelaySeconds = 5
-    )
-
-    $currentRetryCount = 0
-    while ($true) {
-        try {
-            . $ScriptBlock
-            return
-        } catch {
-            if ($currentRetryCount -ge $MaxRetryCount) {
-                throw
-            } else {
-                Write-Warning "Attempt [$($currentRetryCount + 1)] failed: $_. Retrying in $DelaySeconds seconds..."
-                Start-Sleep -Seconds $DelaySeconds
-                $currentRetryCount++
-            }
-        }
-    }
 }
 
 class Folder
@@ -1374,4 +1348,77 @@ class SsrsDataSet
     }
 
     [string] ToString() { return "$($this.Name)" }
+}
+
+class SoapClientProxyDecorator {
+    [SoapClientProxyDecorator]$proxy
+
+    SoapClientProxyDecorator([SoapClientProxyDecorator]$proxy) {
+        $this.proxy = $proxy
+    }
+
+    Dispose() {
+        $this.proxy.Dispose()
+    }
+
+    SetPolicies($path, $policies) {
+        $this.proxy.SetPolicies($path, $policies)
+    }
+
+    DeleteItem($item) {
+        $this.proxy.DeleteItem($item.Path)
+    }
+
+    GetItemType($path) {
+        $this.proxy.GetItemType($path)
+    }
+
+    ListChildren($currentFolder, $recursive) {
+        $this.proxy.ListChildren($currentFolder, $recursive)
+    }
+
+    GetPolicies($path, $inheritParent) {
+        $this.proxy.GetPolicies($path, $inheritParent)
+    }
+
+    InheritParentSecurity($path, $inheritParent) {
+        $this.proxy.InheritParentSecurity($path, $inheritParent)
+    }
+
+    CreateFolder($folderName, $parent, $props) {
+        $this.proxy.CreateFolder($folderName, $parent, $props)
+    }
+    
+    SetItemDataSources($path, $refDataSources) {
+        $this.proxy.SetItemDataSources($path, $refDataSources)
+    }
+
+    SetItemReferences($path, $references) {
+        $this.proxy.SetItemReferences($path, $references)
+    }
+
+    CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings, $MaxRetries = 10, $RetryIntervalInSeconds = 5) {
+        $retryCount = 0
+        $success = $false
+        $result = $null
+
+        while (-not $success -and $retryCount -lt $MaxRetries) {
+            try {
+                $result = $this.proxy.CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings)
+                Write-Host "CreateCatalogItem succeeded."
+                $success = $true
+                return $result
+            } catch {
+                Write-Warning "Attempt $retryCount failed: $_"
+                $retryCount++
+                if ($retryCount -lt $MaxRetries) {
+                    Write-Host "Retrying in $RetryIntervalInSeconds seconds..."
+                    Start-Sleep -Seconds $RetryIntervalInSeconds
+                } else {
+                    Write-Error "CreateCatalogItem failed after $MaxRetries attempts."
+                    throw
+                }
+            }
+        }
+    }
 }
