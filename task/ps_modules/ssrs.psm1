@@ -1351,9 +1351,9 @@ class SsrsDataSet
 }
 
 class SoapClientProxyDecorator {
-    [SoapClientProxyDecorator]$proxy
+    [System.Web.Services.Protocols.SoapHttpClientProtocol]$proxy
 
-    SoapClientProxyDecorator([SoapClientProxyDecorator]$proxy) {
+    SoapClientProxyDecorator([System.Web.Services.Protocols.SoapHttpClientProtocol]$proxy) {
         $this.proxy = $proxy
     }
 
@@ -1369,12 +1369,12 @@ class SoapClientProxyDecorator {
         $this.proxy.DeleteItem($item.Path)
     }
 
-    GetItemType($path) {
-        $this.proxy.GetItemType($path)
+    [string]GetItemType($path) {
+        return $this.proxy.GetItemType($path)
     }
 
-    ListChildren($currentFolder, $recursive) {
-        $this.proxy.ListChildren($currentFolder, $recursive)
+    [object]ListChildren($currentFolder, $recursive) {
+        return $this.proxy.ListChildren($currentFolder, $recursive)
     }
 
     GetPolicies($path, $inheritParent) {
@@ -1385,8 +1385,8 @@ class SoapClientProxyDecorator {
         $this.proxy.InheritParentSecurity($path, $inheritParent)
     }
 
-    CreateFolder($folderName, $parent, $props) {
-        $this.proxy.CreateFolder($folderName, $parent, $props)
+    [object]CreateFolder($folderName, $parent, $props) {
+        return $this.proxy.CreateFolder($folderName, $parent, $props)
     }
     
     SetItemDataSources($path, $refDataSources) {
@@ -1397,7 +1397,7 @@ class SoapClientProxyDecorator {
         $this.proxy.SetItemReferences($path, $references)
     }
 
-    CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings, $MaxRetries = 10, $RetryIntervalInSeconds = 5) {
+    [object]CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings, $MaxRetries = 10, $RetryIntervalInSeconds = 5) {
         $retryCount = 0
         $success = $false
         $result = $null
@@ -1407,7 +1407,6 @@ class SoapClientProxyDecorator {
                 $result = $this.proxy.CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings)
                 Write-Host "CreateCatalogItem succeeded."
                 $success = $true
-                return $result
             } catch {
                 Write-Warning "Attempt $retryCount failed: $_"
                 $retryCount++
@@ -1420,5 +1419,7 @@ class SoapClientProxyDecorator {
                 }
             }
         }
+
+        return $result
     }
 }
