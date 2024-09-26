@@ -5,7 +5,7 @@ function New-DataSource()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$DataSourceName,
         [string]$Path = "/",
         [string][parameter(Mandatory = $true)]$ConnectString,
@@ -108,7 +108,7 @@ function Set-Policy()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [SSRS.ReportingService2010.Policy[]]$Policies,
         [switch]$DisposeProxy
@@ -176,8 +176,10 @@ function Publish-SsrsFolder()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string]$FilesFolder,
+        [int]$MaxRetries = 5,
+        [int]$RetryIntervalInSeconds = 5,
         [switch]$Overwrite
     )
     BEGIN
@@ -188,44 +190,41 @@ function Publish-SsrsFolder()
     }
     PROCESS
     {
-        if ($Folder.Parent)
-        {
-            Write-Verbose "Processing folder '$($Folder.Name)'"
-            
-            $fullPath = New-SsrsFolder -Proxy $Proxy -FolderName $Folder.Name -Parent $Folder.Path() -Hidden:$Folder.Hidden
-    
-            Write-Verbose "Folder created. Full SSRS path of the object is '$fullPath'."
+        Invoke-RetryOperation -Operation {
+            if ($Folder.Parent) {
+                Write-Verbose "Processing folder '$($Folder.Name)'"
+                
+                $fullPath = New-SsrsFolder -Proxy $Proxy -FolderName $Folder.Name -Parent $Folder.Path() -Hidden:$Folder.Hidden
 
-            $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
+                Write-Verbose "Folder created. Full SSRS path of the object is '$fullPath'."
 
-            Write-Verbose "Current folder '$($Folder.Name)' and it's path '$($Folder.Path())'"
-        }
-        else
-        {
-            $currentFolder = "/"
+                $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
 
-            Write-Verbose "Current folder is the root folder"
-        }
-        
-        if($Folder.CleanExistingItems -eq $true){
+                Write-Verbose "Current folder '$($Folder.Name)' and its path '$($Folder.Path())'"
+            } else {
+                $currentFolder = "/"
 
-            Write-Verbose "Clean existing files from folder $($currentFolder)"
+                Write-Verbose "Current folder is the root folder"
+            }
 
-            $catalogItems = $Proxy.ListChildren($currentFolder, $false)
-            foreach($catalogItem in $catalogItems){
-                if($catalogItem.TypeName -ne "Folder"){
-                    Write-Verbose "Remove $($catalogItem.TypeName) $($catalogItem.Path)"
-                    $Proxy.DeleteItem($catalogItem.Path)
+            if ($Folder.CleanExistingItems -eq $true) {
+                Write-Verbose "Clean existing files from folder $($currentFolder)"
+                
+                $catalogItems = $Proxy.ListChildren($currentFolder, $false)
+                foreach ($catalogItem in $catalogItems) {
+                    if ($catalogItem.TypeName -ne "Folder") {
+                        Write-Verbose "Remove $($catalogItem.TypeName) $($catalogItem.Path)"
+                        $Proxy.DeleteItem($catalogItem.Path)
+                    }
                 }
             }
-        }
 
-        Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -RoleAssignments $Folder.RoleAssignments -InheritParentSecurity:$Folder.InheritParentSecurity -Overwrite:$Overwrite
+            Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -RoleAssignments $Folder.RoleAssignments -InheritParentSecurity:$Folder.InheritParentSecurity -Overwrite:$Overwrite
 
-        foreach($folder in $Folder.Folders)
-        {
-            Publish-SsrsFolder -Folder $folder -Proxy $Proxy -FilesFolder $FilesFolder -Overwrite:$Overwrite
-        }
+            foreach ($subfolder in $Folder.Folders) {
+                Publish-SsrsFolder -Folder $subfolder -Proxy $Proxy -FilesFolder $FilesFolder -Overwrite:$Overwrite -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+            }
+        } -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
     }
     END { }
 }
@@ -236,7 +235,9 @@ function Publish-DataSource()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
+        [int]$MaxRetries = 5,
+        [int]$RetryIntervalInSeconds = 5,
         [switch]$Overwrite
     )
     BEGIN
@@ -247,45 +248,42 @@ function Publish-DataSource()
     }
     PROCESS
     {
-        if ($Folder.Parent)
-        {            
-            $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
-        }
-        else
-        {
-            $currentFolder = "/"
-        }
+        Invoke-RetryOperation -Operation {
+            if ($Folder.Parent) {
+                $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
+            } else {
+                $currentFolder = "/"
+            }
 
-        [SsrsDataSource[]]$dataSources = $null
+            [SsrsDataSource[]]$dataSources = $null
 
-        foreach($dataSource in $Folder.DataSources)
-        {
-            $ds = New-DataSource -Proxy $Proxy `
-                            -DataSourceName $dataSource.Name `
-                            -ConnectString $dataSource.ConnectionString `
-                            -Extension $dataSource.Extension `
-                            -Path $currentFolder `
-                            -CredentialRetrieval $dataSource.CredentialRetrieval `
-                            -UserName $dataSource.UserName `
-                            -Password $dataSource.Password `
-                            -Hidden:$dataSource.Hidden `
-                            -WindowsCredentials:$dataSource.WindowsCredentials `
-                            -ImpersonateUser:$dataSource.ImpersonateUser `
-                            -Overwrite:$Overwrite `
-                
-            $ds | Out-String | Write-Verbose
+            foreach ($dataSource in $Folder.DataSources) {
+                $ds = New-DataSource -Proxy $Proxy `
+                                     -DataSourceName $dataSource.Name `
+                                     -ConnectString $dataSource.ConnectionString `
+                                     -Extension $dataSource.Extension `
+                                     -Path $currentFolder `
+                                     -CredentialRetrieval $dataSource.CredentialRetrieval `
+                                     -UserName $dataSource.UserName `
+                                     -Password $dataSource.Password `
+                                     -Hidden:$dataSource.Hidden `
+                                     -WindowsCredentials:$dataSource.WindowsCredentials `
+                                     -ImpersonateUser:$dataSource.ImpersonateUser `
+                                     -Overwrite:$Overwrite
 
-            Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $dataSource.Name -RoleAssignments $dataSource.RoleAssignments -InheritParentSecurity:$dataSource.InheritParentSecurity -Overwrite:$Overwrite
+                $ds | Out-String | Write-Verbose
 
-            $dataSources += [SsrsDataSource]::new($ds.Name, $ds.Path, $ds.ID)
-        }        
+                Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $dataSource.Name -RoleAssignments $dataSource.RoleAssignments -InheritParentSecurity:$dataSource.InheritParentSecurity -Overwrite:$Overwrite
 
-        foreach($folder in $Folder.Folders)
-        {
-            $dataSources += Publish-DataSource -Folder $folder -Proxy $Proxy -Overwrite:$Overwrite
-        }
+                $dataSources += [SsrsDataSource]::new($ds.Name, $ds.Path, $ds.ID)
+            }
 
-        return $dataSources
+            foreach ($subfolder in $Folder.Folders) {
+                $dataSources += Publish-DataSource -Folder $subfolder -Proxy $Proxy -Overwrite:$Overwrite -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+            }
+
+            return $dataSources
+        } -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
     }
     END { }
 }
@@ -296,9 +294,11 @@ function Publish-DataSet()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [SsrsDataSource[]]$DataSources,
         [string]$FilesFolder,
+        [int]$MaxRetries = 5,
+        [int]$RetryIntervalInSeconds = 5,
         [switch]$Overwrite
     )
     BEGIN
@@ -309,48 +309,41 @@ function Publish-DataSet()
     }
     PROCESS
     {
-        if ($Folder.Parent)
-        {            
-            $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
-        }
-        else
-        {
-            $currentFolder = "/"
-        }
-
-        [SsrsDataSet[]]$dataSets = $null
-
-        foreach($dataSet in $Folder.DataSets)
-        {
-            $rsdPath = Join-Path $FilesFolder $dataSet.FileName
-
-            if (Test-Path -LiteralPath $rsdPath -PathType Leaf)
-            {
-                New-SsrsDataSet -Proxy $Proxy `
-                                -RsdPath $rsdPath `
-                                -DataSources $DataSources `
-                                -Path $currentFolder `
-                                -Name $dataSet.Name `
-                                -Hidden:$dataSet.Hidden `
-                                -Overwrite:$Overwrite `
-                    | Out-String | Write-Verbose
-                
-                Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $dataSet.Name -RoleAssignments $dataSet.RoleAssignments -InheritParentSecurity:$dataSet.InheritParentSecurity -Overwrite:$Overwrite
-            
-                $dataSets += [SsrsDataSet]::new($dataSet.Name, "$($currentFolder.TrimEnd('/'))/$($dataSet.Name)")
+        Invoke-RetryOperation -Operation {
+            if ($Folder.Parent) {
+                $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
+            } else {
+                $currentFolder = "/"
             }
-            else
-            {
-                Write-Warning "File $($dataSet.FileName) has not be found in the path $FilesFolder."    
+
+            [SsrsDataSet[]]$dataSets = $null
+
+            foreach ($dataSet in $Folder.DataSets) {
+                $rsdPath = Join-Path $FilesFolder $dataSet.FileName
+
+                if (Test-Path -LiteralPath $rsdPath -PathType Leaf) {
+                    New-SsrsDataSet -Proxy $Proxy `
+                                    -RsdPath $rsdPath `
+                                    -DataSources $DataSources `
+                                    -Path $currentFolder `
+                                    -Name $dataSet.Name `
+                                    -Hidden:$dataSet.Hidden `
+                                    -Overwrite:$Overwrite | Out-String | Write-Verbose
+
+                    Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $dataSet.Name -RoleAssignments $dataSet.RoleAssignments -InheritParentSecurity:$dataSet.InheritParentSecurity -Overwrite:$Overwrite
+
+                    $dataSets += [SsrsDataSet]::new($dataSet.Name, "$($currentFolder.TrimEnd('/'))/$($dataSet.Name)")
+                } else {
+                    Write-Warning "File $($dataSet.FileName) has not been found in the path $FilesFolder."
+                }
             }
-        }
 
-        foreach($folder in $Folder.Folders)
-        {
-            $dataSets += Publish-DataSet -Folder $folder -FilesFolder $FilesFolder -Proxy $Proxy -Overwrite:$Overwrite -DataSources $DataSources
-        }
+            foreach ($subfolder in $Folder.Folders) {
+                $dataSets += Publish-DataSet -Folder $subfolder -FilesFolder $FilesFolder -Proxy $Proxy -Overwrite:$Overwrite -DataSources $DataSources -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+            }
 
-        return $dataSets
+            return $dataSets
+        } -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
     }
     END { }
 }
@@ -361,12 +354,14 @@ function Publish-Reports()
     param
     (
         [Folder][parameter(Mandatory = $true)]$Folder,
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string]$FilesFolder,
         [SsrsDataSource[]]$DataSources,
         [SsrsDataSet[]]$DataSets,
         [bool]$ReferenceDataSources,
         [bool]$ReferenceDataSets,
+        [int]$MaxRetries = 5,
+        [int]$RetryIntervalInSeconds = 5,
         [switch]$Overwrite
     )
     BEGIN
@@ -377,45 +372,38 @@ function Publish-Reports()
     }
     PROCESS
     {
-        if ($Folder.Parent)
-        {            
-            $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
-        }
-        else
-        {
-            $currentFolder = "/"
-        }
-
-        foreach($report in $Folder.Reports)
-        {
-            $rdlPath = Join-Path $FilesFolder $report.FileName
-
-            if (Test-Path -LiteralPath $rdlPath -PathType Leaf)
-            {
-                New-SsrsReport -Proxy $Proxy `
-                            -RdlPath $rdlPath `
-                            -Path $currentFolder `
-                            -Name $report.Name `
-                            -DataSources $DataSources `
-                            -ReferenceDataSources $ReferenceDataSources `
-                            -DataSets $DataSets `
-                            -ReferenceDataSets $ReferenceDataSets `
-                            -Hidden:$report.Hidden `
-                            -Overwrite:$Overwrite `
-                    | Out-String | Write-Verbose
-
-                Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
+        Invoke-RetryOperation -Operation {
+            if ($Folder.Parent) {
+                $currentFolder = "$($Folder.Path().TrimEnd('/'))/$($Folder.Name)"
+            } else {
+                $currentFolder = "/"
             }
-            else
-            {
-                Write-Warning "File $($report.FileName) has not be found in the path $FilesFolder. Skipping the deployment."
-            }
-        }
 
-        foreach($folder in $Folder.Folders)
-        {
-            Publish-Reports -Folder $folder -FilesFolder $FilesFolder -Proxy $Proxy -DataSources $DataSources -ReferenceDataSources $ReferenceDataSources -DataSets $DataSets -ReferenceDataSets $ReferenceDataSets -Overwrite:$Overwrite
-        }
+            foreach ($report in $Folder.Reports) {
+                $rdlPath = Join-Path $FilesFolder $report.FileName
+
+                if (Test-Path -LiteralPath $rdlPath -PathType Leaf) {
+                    New-SsrsReport -Proxy $Proxy `
+                                   -RdlPath $rdlPath `
+                                   -Path $currentFolder `
+                                   -Name $report.Name `
+                                   -DataSources $DataSources `
+                                   -ReferenceDataSources $ReferenceDataSources `
+                                   -DataSets $DataSets `
+                                   -ReferenceDataSets $ReferenceDataSets `
+                                   -Hidden:$report.Hidden `
+                                   -Overwrite:$Overwrite | Out-String | Write-Verbose
+
+                    Set-SecurityPolicy -Proxy $Proxy -Folder $currentFolder -Name $report.Name -RoleAssignments $report.RoleAssignments -InheritParentSecurity:$report.InheritParentSecurity -Overwrite:$Overwrite
+                } else {
+                    Write-Warning "File $($report.FileName) has not been found in the path $FilesFolder. Skipping deployment."
+                }
+            }
+
+            foreach ($subfolder in $Folder.Folders) {
+                Publish-Reports -Folder $subfolder -FilesFolder $FilesFolder -Proxy $Proxy -DataSources $DataSources -ReferenceDataSources $ReferenceDataSources -DataSets $DataSets -ReferenceDataSets $ReferenceDataSets -Overwrite:$Overwrite -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+            }
+        } -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
     }
     END { }
 }
@@ -425,7 +413,7 @@ function Set-SecurityPolicy()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Folder,
         [string]$Name,
         [RoleAssignment[]]$RoleAssignments,
@@ -621,7 +609,7 @@ function Test-SsrsItem()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -660,7 +648,7 @@ function Test-InheritParentSecurity()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -696,7 +684,7 @@ function Set-InheritParentSecurity()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$Path,
         [switch]$DisposeProxy
     )
@@ -728,7 +716,7 @@ function New-SsrsFolder()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string][parameter(Mandatory = $true)]$FolderName,
         [string]$Parent = "/",
         [switch]$DisposeProxy,
@@ -846,7 +834,7 @@ function Get-SsrsItem()
     [CmdletBinding()]
     param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [string]$Path = '/',
         [ValidateSet("Component", "Model", "LinkedReport", "Site", "DataSet", "Folder","DataSource","Report", "Resource")][parameter(Mandatory = $true)][string]$Type,
         [switch]$DisposeProxy
@@ -904,7 +892,7 @@ function New-SsrsReport()
     [CmdletBinding()]
 	param
 	(
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [ValidateScript({Test-Path $_ -PathType 'Leaf'})][parameter(Mandatory = $true)][System.IO.FileInfo]$RdlPath,    
         [string]$Path = "/",
         [string]$Name,
@@ -1080,7 +1068,7 @@ function New-SsrsDataSet()
     [CmdletBinding()]
 	param
     (
-        [SoapClientProxyDecorator][parameter(Mandatory = $true)]$Proxy,
+        [System.Web.Services.Protocols.SoapHttpClientProtocol][parameter(Mandatory = $true)]$Proxy,
         [ValidateScript({Test-Path $_ -PathType 'Leaf'})][parameter(Mandatory = $true)][string]$RsdPath,
         [SsrsDataSource[]]$DataSources,
         [string]$Path = "/",
@@ -1350,76 +1338,31 @@ class SsrsDataSet
     [string] ToString() { return "$($this.Name)" }
 }
 
-class SoapClientProxyDecorator {
-    [System.Web.Services.Protocols.SoapHttpClientProtocol]$proxy
+function Invoke-RetryOperation {
+    [CmdletBinding()]
+    param (
+        [ScriptBlock][parameter(Mandatory = $true)]$Operation,  
+        [array]$Args = @(),
+        [int]$MaxRetries = 5,
+        [int]$RetryIntervalInSeconds = 5 
+    )
 
-    SoapClientProxyDecorator([System.Web.Services.Protocols.SoapHttpClientProtocol]$proxy) {
-        $this.proxy = $proxy
-    }
+    $retryCount = 0
+    $success = $false
 
-    Dispose() {
-        $this.proxy.Dispose()
-    }
-
-    SetPolicies($path, $policies) {
-        $this.proxy.SetPolicies($path, $policies)
-    }
-
-    DeleteItem($item) {
-        $this.proxy.DeleteItem($item.Path)
-    }
-
-    [string]GetItemType($path) {
-        return $this.proxy.GetItemType($path)
-    }
-
-    [object]ListChildren($currentFolder, $recursive) {
-        return $this.proxy.ListChildren($currentFolder, $recursive)
-    }
-
-    GetPolicies($path, $inheritParent) {
-        $this.proxy.GetPolicies($path, $inheritParent)
-    }
-
-    InheritParentSecurity($path, $inheritParent) {
-        $this.proxy.InheritParentSecurity($path, $inheritParent)
-    }
-
-    [object]CreateFolder($folderName, $parent, $props) {
-        return $this.proxy.CreateFolder($folderName, $parent, $props)
-    }
-    
-    SetItemDataSources($path, $refDataSources) {
-        $this.proxy.SetItemDataSources($path, $refDataSources)
-    }
-
-    SetItemReferences($path, $references) {
-        $this.proxy.SetItemReferences($path, $references)
-    }
-
-    [object]CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings, $MaxRetries = 10, $RetryIntervalInSeconds = 5) {
-        $retryCount = 0
-        $success = $false
-        $result = $null
-
-        while (-not $success -and $retryCount -lt $MaxRetries) {
-            try {
-                $result = $this.proxy.CreateCatalogItem($itemType, $name, $path, $overwrite, $rawDefinition, $properties, $warnings)
-                Write-Host "CreateCatalogItem succeeded."
-                $success = $true
-            } catch {
-                Write-Warning "Attempt $retryCount failed: $_"
-                $retryCount++
-                if ($retryCount -lt $MaxRetries) {
-                    Write-Host "Retrying in $RetryIntervalInSeconds seconds..."
-                    Start-Sleep -Seconds $RetryIntervalInSeconds
-                } else {
-                    Write-Error "CreateCatalogItem failed after $MaxRetries attempts."
-                    throw
-                }
+    while (-not $success -and $retryCount -lt $MaxRetries) {
+        try {
+            & $Operation @Args
+            $success = $true
+        } catch {
+            Write-Warning "Operation failed: $_"
+            $retryCount++
+            if ($retryCount -lt $MaxRetries) {
+                Write-Host "Retrying in $RetryIntervalInSeconds seconds (Attempt $retryCount of $MaxRetries)..."
+                Start-Sleep -Seconds $RetryIntervalInSeconds
+            } else {
+                throw "Operation failed after $MaxRetries attempts."
             }
         }
-
-        return $result
     }
 }
