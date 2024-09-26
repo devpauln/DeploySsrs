@@ -14,6 +14,8 @@ try
     $overwrite = Get-VstsInput -Name "overwrite" -AsBool
     $referenceDataSources = Get-VstsInput -Name "referenceDataSources" -AsBool
     $referenceDataSets = Get-VstsInput -Name "referenceDataSets" -AsBool
+    $MaxRetries = Get-VstsInput -Name "maxRetries" -Require
+    $RetryIntervalInSeconds = Get-VstsInput -Name "retryIntervalInSeconds" -Require
 
     Import-Module -Name $PSScriptRoot\ps_modules\ssrs.psm1
 
@@ -31,8 +33,6 @@ try
         $proxy = New-WebServiceProxy -Uri $url -Namespace SSRS.ReportingService2010 -Credential $credential -Class "SSRS"
     }
 
-    $decoratedProxy = [SoapClientProxyDecorator]::new($proxy);
-
     if(-not (Test-Path $rdlFilesFolder -PathType Container))
     {
         throw "Provided files folder path $rdlFilesFolder is not valid."
@@ -46,16 +46,16 @@ try
     {
         throw "Provided configuration file path $ssrsFilePath is not valid."
     }
-    Publish-SsrsFolder -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite
-    $dataSources = Publish-DataSource -Folder $folder -Proxy $decoratedProxy -Overwrite:$overwrite
-    $dataSets = Publish-DataSet -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite -DataSources $dataSources
-    Publish-Reports -Folder $folder -Proxy $decoratedProxy -FilesFolder $rdlFilesFolder -DataSources $dataSources -ReferenceDataSources $referenceDataSources -DataSets $dataSets -ReferenceDataSets $referenceDataSets -Overwrite:$overwrite
+
+    Publish-SsrsFolder -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+    $dataSources = Publish-DataSource -Folder $folder -Proxy $proxy -Overwrite:$overwrite -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+    $dataSets = Publish-DataSet -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -Overwrite:$overwrite -DataSources $dataSources -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds
+    Publish-Reports -Folder $folder -Proxy $proxy -FilesFolder $rdlFilesFolder -DataSources $dataSources -ReferenceDataSources $referenceDataSources -DataSets $dataSets -ReferenceDataSets $referenceDataSets -MaxRetries $MaxRetries -RetryIntervalInSeconds $RetryIntervalInSeconds -Overwrite:$overwrite 
 }
 finally
 {
-    if ($decoratedProxy)
-    {
-        $decoratedProxy.Dispose()
+    if ($proxy) {
+        $proxy.Dispose()
     }
 
     Trace-VstsLeavingInvocation $MyInvocation
