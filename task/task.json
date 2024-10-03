@@ -1,9 +1,9 @@
 {
-  "id": "8608c690-a833-11e7-a937-ebb9e5076155",
+  "id": "084b95ec-0d68-4724-a4e9-2b7576fd98f5",
   "name": "DeploySsrs",
   "friendlyName": "Deploy MS SQL SSRS Reports",
   "description": "Deploy items on MS SQL SSRS server based on a configuration file.",
-  "author": "Mario Majcica",
+  "author": "Paul Noel",
   "helpMarkDown": "",
   "category": "Deploy",
   "visibility": [
@@ -12,7 +12,7 @@
   ],
   "demands": [],
   "version": {
-    "Major": "3",
+    "Major": "4",
     "Minor": "1",
     "Patch": "12"
   },
@@ -115,7 +115,25 @@
       "name": "overwrite",
       "required": false,
       "type": "boolean"
-    }
+    },
+    {
+      "groupName": "deploy",
+      "defaultValue": "5",
+      "helpMarkDown": "It sets the max retries of re-executing the failed process on the remote-server for reports",
+      "label": "Max Retries",
+      "name": "maxRetries",
+      "required": true,
+      "type": "number" 
+  },
+  {
+      "groupName": "deploy",
+      "defaultValue": "5",
+      "helpMarkDown": "It sets the interval (in seconds) between retries of the failed process on the remote-server for reports",
+      "label": "Retry Interval in Seconds",
+      "name": "retryIntervalInSeconds",
+      "required": true,
+      "type": "number"
+  }
   ],
   "execution": {
     "PowerShell3": {

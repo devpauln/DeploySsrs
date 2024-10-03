@@ -1,13 +1,13 @@
 {
   "manifestVersion": 1,
-  "extensionId": "deploy-ssrs",
-  "name": "Deploy SSRS",
-  "version": "1.0.7",
-  "publisher": "mmajcica",
+  "extensionId": "private-deploy-ssrs",
+  "name": "Deploy SSRS - Retry",
+  "version": "1.0.10",
+  "publisher": "VictorPaulNoel",
   "description": "Deploy SSRS packages",
   "public": false,
   "galleryFlags": [
-    "Public"
+    "Private"
   ],
   "icons": {
     "default": "images/logo.png",
@@ -40,7 +40,7 @@
   },
   "repository": {
       "type": "git",
-      "uri": "https://github.com/mmajcica/DeploySsrs"
+      "uri": "https://github.com/devpauln/DeploySsrs"
   },
   "branding": {
     "color": "#e9ebed",
@@ -75,7 +75,7 @@
   ],
   "contributions": [
     {
-      "id": "DeploySsrs",
+      "id": "DeploySsrsRetry",
       "type": "ms.vss-distributed-task.task",
       "targets": [
         "ms.vss-distributed-task.tasks"
